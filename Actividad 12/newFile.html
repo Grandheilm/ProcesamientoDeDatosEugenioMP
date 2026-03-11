@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reconocimiento de Números</title>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous">
+    </script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        h1 { color: #333; }
+        #canvas {
+            border: 3px solid #333;
+            background-color: black;
+            cursor: crosshair;
+        }
+        #resultado {
+            margin-top: 20px;
+            font-size: 80px;
+            font-weight: bold;
+            color: #333;
+        }
+        #label-resultado {
+            font-size: 20px;
+            color: #666;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 30px;
+            font-size: 16px;
+            background-color: #e05a00;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #c04a00; }
+    </style>
+</head>
+<body>
+    <h1>Reconocimiento de Números - MNIST</h1>
+    <p>Dibuja un número del 0 al 9 en el canvas:</p>
+
+    <canvas id="canvas" width="280" height="280"></canvas>
+
+    <button onclick="limpiarCanvas()">Limpiar</button>
+
+    <p id="label-resultado">Predicción:</p>
+    <div id="resultado">?</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let isDrawing = false;
+
+        // Configuración del pincel
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Eventos del mouse
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            enviarPixeles();
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            enviarPixeles();
+        });
+
+        // Eventos táctiles (para móvil)
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('touchend', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            enviarPixeles();
+        });
+
+        function enviarPixeles() {
+            // Escalar el canvas de 280x280 a 28x28
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 28;
+            tempCanvas.height = 28;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0, 28, 28);
+
+            // Obtener los pixeles del canvas en arreglo de 784
+            var pixels = [];
+            for (var x = 0; x < 28; x++) {
+                for (var y = 0; y < 28; y++) {
+                    var imgData = tempCtx.getImageData(y, x, 1, 1);
+                    var data = imgData.data;
+                    // Usar canal Alpha para blanco/negro
+                    var color = (data[3]) / 255;
+                    color = (Math.round(color * 100) / 100).toFixed(2);
+                    pixels.push(color);
+                }
+            }
+
+            // Enviar pixeles al servidor Python por HTTP
+            $.post("http://localhost:8000", { pixeles: pixels.join(",") },
+                function(response) {
+                    console.log("Resultado: " + response);
+                    $("#resultado").html(response);
+                }
+            ).fail(function() {
+                $("#resultado").html("Error");
+                console.log("No se pudo conectar al servidor Python.");
+            });
+        }
+
+        function limpiarCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            $("#resultado").html("?");
+        }
+    </script>
+</body>
+</html>
